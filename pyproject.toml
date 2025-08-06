@@ -1,0 +1,33 @@
+[project]
+name = "quantitative-hedging"
+version = "0.1.0"
+description = "Simple quantitative hedging utilities"
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [{name = "Unknown"}]
+dependencies = [
+    "numpy",
+    "pandas",
+    "requests",
+    "cvxopt",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "ruff",
+    "pyright",
+    "pre-commit",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.pyright]
+pythonVersion = "3.12"
+
+[tool.pytest.ini_options]
+addopts = "--cov=hedge --cov-branch --cov-report=term-missing"
+
