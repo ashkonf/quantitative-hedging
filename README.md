@@ -6,7 +6,9 @@ A Python library for constructing hedging baskets to offset positions using hist
 - [Overview](#overview)
 - [Installation](#installation)
 - [Usage](#usage)
-- [Example](#example)
+- [Testing](#testing)
+- [Linting](#linting)
+- [Type Checking](#type-checking)
 - [License](#license)
 - [Links](#links)
 
@@ -14,22 +16,16 @@ A Python library for constructing hedging baskets to offset positions using hist
 The Quantitative Hedging repository provides an easy way to hedge a stock using a basket of other stocks which collectively behave as a hedge against the desired stock. It is intended for two types of users: (1) market makers who need to offset the risk derived from undesired inventory and (2) quantitative researchers who need to identify factors or replicate studies involving the performance of a security, portfolio, or hedge fund.
 
 ## Installation
-Quantitative Hedging requires the following libraries:
+This project uses [uv](https://github.com/astral-sh/uv) for dependency management. Install all dependencies, including development tools, with:
 
-- [pandas](https://pandas.pydata.org/)
-- [cvxopt](https://cvxopt.org/)
-- [numpy](https://numpy.org/)
-
-Install these libraries with pip:
-
-```
-pip install -r requirements.txt
+```bash
+uv sync --all-extras --dev
 ```
 
 ## Usage
 This repository exposes a single public function `build_basket` (in `hedge.py`). The function builds a basket of stocks intended to hedge a desired stock.
 
-```
+```python
 from hedge import build_basket
 build_basket(hedged_ticker_symbol, basket_ticker_symbols)
 ```
@@ -41,24 +37,27 @@ Arguments:
 | `hedged_ticker_symbol` | `str` | Ticker symbol of the stock to hedge. | No | `"AAPL"` |
 | `basket_ticker_symbols` | `list[str]` | Ticker symbols considered for the hedging basket. | No | `["GOOG", "MSFT", "NFLX", "AMZN", "FB"]` |
 
-## Example
-```
-from hedge import build_basket
+## Testing
+Run the test suite with full coverage using:
 
-hedged_ticker_symbol = "AAPL"
-basket_ticker_symbols = ["GOOG", "MSFT", "NFLX", "AMZN", "FB"]
-
-print("Hedge for %s:" % hedged_ticker_symbol)
-print(build_basket(hedged_ticker_symbol, basket_ticker_symbols))
+```bash
+uv run pytest
 ```
 
-This will produce output similar to:
+## Linting
+Format and lint the code with [ruff](https://docs.astral.sh/ruff/):
 
-```
-{'AAPL': 0.2614353523521262, 'FB': 0.1921680128468791, 'AMZN': 0.5463966348009947}
+```bash
+uv run ruff format
+uv run ruff check .
 ```
 
-A snippet like this can be incorporated in any Python application.
+## Type Checking
+Static type checking is performed with [pyright](https://github.com/microsoft/pyright):
+
+```bash
+uv run pyright
+```
 
 ## License
 Quantitative Hedging is licensed under the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0).
@@ -68,4 +67,3 @@ Quantitative Hedging is licensed under the [Apache License 2.0](https://www.apac
 - [CVXOPT](https://cvxopt.org/)
 - [NumPy](https://numpy.org/)
 - [pandas](https://pandas.pydata.org/)
-
