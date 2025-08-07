@@ -19,15 +19,21 @@ MARKET_DAYS_IN_YEAR: int = 252
 
 
 def csvstr2df(string: str) -> pd.DataFrame:
+    """Convert a CSV string to a DataFrame."""
+
     file_: StringIO = StringIO(string)
     return pd.read_csv(file_, sep=",")
 
 
 def datetime_to_timestamp(dt: datetime) -> float:
+    """Return UNIX timestamp for a datetime."""
+
     return time.mktime(dt.timetuple()) + dt.microsecond / 1_000_000.0
 
 
 def historical_prices(ticker_symbol: str) -> pd.Series:
+    """Fetch adjusted closing prices from Yahoo Finance."""
+
     url: str = (
         "https://query1.finance.yahoo.com/v7/finance/download/%s?period1=%s&period2=%s"
         "&interval=1d&events=history&includeAdjustedClose=true"
@@ -42,6 +48,8 @@ def historical_prices(ticker_symbol: str) -> pd.Series:
 
 
 def _truncate_quotes(quotes: Dict[str, pd.Series]) -> Dict[str, pd.Series]:
+    """Limit each quote series to one year of data."""
+
     truncated_quotes: Dict[str, pd.Series] = {}
     for ticker in quotes:
         truncated_quotes[ticker] = cast(
@@ -52,12 +60,16 @@ def _truncate_quotes(quotes: Dict[str, pd.Series]) -> Dict[str, pd.Series]:
 
 
 def _remove_row(matrix: npt.NDArray[np.float64], row: int) -> npt.NDArray[np.float64]:
+    """Return matrix with the specified row removed."""
+
     return np.vstack((matrix[:row], matrix[row + 1 :]))
 
 
 def _filter_negative_prices(
     price_matrix: npt.NDArray[np.float64], ticker_map: List[str]
 ) -> Tuple[npt.NDArray[np.float64], List[str]]:
+    """Drop assets containing negative prices."""
+
     index: int = 0
     while index < len(price_matrix):
         if any(value < 0.0 for value in price_matrix[index]):
@@ -71,9 +83,13 @@ def _filter_negative_prices(
 def _filter_duplicate_rows(
     price_matrix: npt.NDArray[np.float64], ticker_map: List[str]
 ) -> Tuple[npt.NDArray[np.float64], List[str]]:
+    """Remove duplicate rows from the price matrix."""
+
     def rows_equal(
         row1: npt.NDArray[np.float64], row2: npt.NDArray[np.float64]
     ) -> bool:
+        """Return True if two rows are identical."""
+
         return all(item == row2[index] for index, item in enumerate(row1))
 
     index1: int = 0
@@ -92,6 +108,8 @@ def _filter_duplicate_rows(
 def _filter_no_variance_rows(
     price_matrix: npt.NDArray[np.float64], ticker_map: List[str]
 ) -> Tuple[npt.NDArray[np.float64], List[str]]:
+    """Remove rows with no price variance."""
+
     index: int = 0
     while index < len(price_matrix):
         if len(set(price_matrix[0])) == 1:
@@ -105,6 +123,8 @@ def _filter_no_variance_rows(
 def _filter_low_variance_rows(
     price_matrix: npt.NDArray[np.float64], ticker_map: List[str]
 ) -> Tuple[npt.NDArray[np.float64], List[str]]:
+    """Remove rows whose variance is below the threshold."""
+
     variance_threshold: float = 0.1
     index: int = 0
     while index < len(price_matrix):
@@ -120,6 +140,8 @@ def _filter_low_variance_rows(
 def _build_price_matrix(
     quotes: Dict[str, pd.Series], ticker: str
 ) -> Tuple[npt.NDArray[np.float64], List[str]]:
+    """Construct the price matrix and ticker map."""
+
     price_matrix: npt.NDArray[np.float64] = quotes[ticker].to_numpy().reshape(1, -1)
     ticker_map: List[str] = [ticker]
     for index, other_ticker in enumerate(quotes):
@@ -135,19 +157,17 @@ def _build_price_matrix(
 
 def _build_returns_matrix(
     price_matrix: npt.NDArray[np.float64],
-) -> List[List[float]]:
-    returns_matrix: List[List[float]] = []
-    for row in price_matrix:
-        returns: List[float] = []
-        for index in range(len(row) - 1):
-            returns.append((row[index + 1] - row[index]) / row[index])
-        returns_matrix.append(returns)
-    return returns_matrix
+) -> npt.NDArray[np.float64]:
+    """Compute matrix of period-to-period returns."""
+
+    return np.diff(price_matrix, axis=1) / price_matrix[:, :-1]
 
 
 def _minimize_portfolio_variance(
-    returns_matrix: List[List[float]],
+    returns_matrix: npt.NDArray[np.float64],
 ) -> CVXMatrix:
+    """Solve quadratic program to minimize portfolio variance."""
+
     s: npt.NDArray[np.float64] = np.cov(returns_matrix).astype(np.float64)
     n: int = len(s) - 1
     p: npt.NDArray[np.float64] = np.vstack(
@@ -174,6 +194,8 @@ def _minimize_portfolio_variance(
 
 
 def _filter_small_weights(weights: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
+    """Zero out near-zero weights and renormalize."""
+
     weight_threshold: float = 0.01
     for index, weight in enumerate(weights):
         if abs(weight) < weight_threshold:
@@ -187,6 +209,8 @@ def _compose_basket(
     ticker_map: List[str],
     hedged_ticker_symbol: str,
 ) -> Dict[str, float]:
+    """Create a hedging basket from optimized weights."""
+
     basket: Dict[str, float] = {}
     for index in range(int(len(weights) / 2)):
         pweight: float = float(weights[index])
@@ -200,6 +224,8 @@ def _compose_basket(
 def build_basket(
     hedged_ticker_symbol: str, basket_ticker_symbols: List[str]
 ) -> Dict[str, float]:
+    """Construct a hedging basket for the target ticker."""
+
     quotes: Dict[str, pd.Series] = {
         ticker: historical_prices(ticker)
         for ticker in set(basket_ticker_symbols + [hedged_ticker_symbol])
