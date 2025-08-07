@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 from io import StringIO
+import logging
 import time
 from statistics import variance
 from typing import TYPE_CHECKING, Dict, List, Tuple, cast
@@ -17,6 +18,8 @@ if TYPE_CHECKING:
 
 MARKET_DAYS_IN_YEAR: int = 252
 
+logger = logging.getLogger(__name__)
+
 
 def csvstr2df(string: str) -> pd.DataFrame:
     file_: StringIO = StringIO(string)
@@ -27,7 +30,24 @@ def datetime_to_timestamp(dt: datetime) -> float:
     return time.mktime(dt.timetuple()) + dt.microsecond / 1_000_000.0
 
 
-def historical_prices(ticker_symbol: str) -> pd.Series:
+def historical_prices(
+    ticker_symbol: str, retries: int = 3, backoff: float = 0.3
+) -> pd.Series:
+    """Fetch adjusted close prices for ``ticker_symbol``.
+
+    The Yahoo Finance endpoint occasionally fails or returns malformed data. This
+    function retries the download a few times and validates that the response
+    contains the expected ``Adj Close`` column before returning the series.
+
+    Args:
+        ticker_symbol: Symbol to fetch.
+        retries: Number of attempts before giving up.
+        backoff: Initial delay between retries in seconds; doubles each retry.
+
+    Raises:
+        RuntimeError: If the data cannot be retrieved or parsed.
+    """
+
     url: str = (
         "https://query1.finance.yahoo.com/v7/finance/download/%s?period1=%s&period2=%s"
         "&interval=1d&events=history&includeAdjustedClose=true"
@@ -37,8 +57,40 @@ def historical_prices(ticker_symbol: str) -> pd.Series:
             int(datetime_to_timestamp(datetime.now())),
         )
     )
-    df: pd.DataFrame = csvstr2df(requests.get(url).text)
-    return cast(pd.Series, df["Adj Close"])
+
+    for attempt in range(retries):
+        try:
+            logger.debug(
+                "Fetching historical prices for %s (attempt %d/%d)",
+                ticker_symbol,
+                attempt + 1,
+                retries,
+            )
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()
+            df: pd.DataFrame = csvstr2df(response.text)
+            if "Adj Close" not in df.columns:
+                raise ValueError("'Adj Close' column missing")
+            return cast(pd.Series, df["Adj Close"])
+        except (requests.RequestException, ValueError, pd.errors.ParserError) as exc:
+            logger.warning(
+                "Attempt %d/%d to fetch %s failed: %s",
+                attempt + 1,
+                retries,
+                ticker_symbol,
+                exc,
+            )
+            if attempt == retries - 1:
+                logger.error(
+                    "Failed to retrieve historical prices for %s", ticker_symbol
+                )
+                raise RuntimeError(
+                    f"Failed to retrieve historical prices for {ticker_symbol}"
+                ) from exc
+            time.sleep(backoff * 2**attempt)
+
+    logger.error("Failed to retrieve historical prices for %s", ticker_symbol)
+    raise RuntimeError(f"Failed to retrieve historical prices for {ticker_symbol}")
 
 
 def _truncate_quotes(quotes: Dict[str, pd.Series]) -> Dict[str, pd.Series]:
@@ -48,10 +100,16 @@ def _truncate_quotes(quotes: Dict[str, pd.Series]) -> Dict[str, pd.Series]:
             pd.Series,
             quotes[ticker][-min(MARKET_DAYS_IN_YEAR, len(quotes[ticker])) :],
         )
+        logger.debug(
+            "Truncated quotes for %s to %d entries",
+            ticker,
+            len(truncated_quotes[ticker]),
+        )
     return truncated_quotes
 
 
 def _remove_row(matrix: npt.NDArray[np.float64], row: int) -> npt.NDArray[np.float64]:
+    logger.debug("Removing row %d", row)
     return np.vstack((matrix[:row], matrix[row + 1 :]))
 
 
@@ -61,6 +119,7 @@ def _filter_negative_prices(
     index: int = 0
     while index < len(price_matrix):
         if any(value < 0.0 for value in price_matrix[index]):
+            logger.debug("Removing %s due to negative prices", ticker_map[index])
             price_matrix = _remove_row(price_matrix, index)
             del ticker_map[index]
         else:
@@ -81,6 +140,7 @@ def _filter_duplicate_rows(
         index2: int = index1 + 1
         while index2 < len(price_matrix):
             if rows_equal(price_matrix[index1], price_matrix[index2]):
+                logger.debug("Removing duplicate row for %s", ticker_map[index2])
                 price_matrix = _remove_row(price_matrix, index1)
                 del ticker_map[index2]
             else:
@@ -95,6 +155,7 @@ def _filter_no_variance_rows(
     index: int = 0
     while index < len(price_matrix):
         if len(set(price_matrix[index])) == 1:
+            logger.debug("Removing %s due to no variance", ticker_map[index])
             price_matrix = _remove_row(price_matrix, index)
             del ticker_map[index]
         else:
@@ -110,6 +171,7 @@ def _filter_low_variance_rows(
     while index < len(price_matrix):
         row_values: List[float] = [float(x) for x in price_matrix[index]]
         if variance(row_values) < variance_threshold:
+            logger.debug("Removing %s due to low variance", ticker_map[index])
             price_matrix = _remove_row(price_matrix, index)
             del ticker_map[index]
         else:
@@ -130,6 +192,7 @@ def _build_price_matrix(
     price_matrix, ticker_map = _filter_duplicate_rows(price_matrix, ticker_map)
     price_matrix, ticker_map = _filter_no_variance_rows(price_matrix, ticker_map)
     price_matrix, ticker_map = _filter_low_variance_rows(price_matrix, ticker_map)
+    logger.debug("Built price matrix with shape %s for %s", price_matrix.shape, ticker)
     return (price_matrix, ticker_map)
 
 
@@ -142,6 +205,7 @@ def _build_returns_matrix(
         for index in range(len(row) - 1):
             returns.append((row[index + 1] - row[index]) / row[index])
         returns_matrix.append(returns)
+    logger.debug("Built returns matrix with %d rows", len(returns_matrix))
     return returns_matrix
 
 
@@ -167,9 +231,11 @@ def _minimize_portfolio_variance(
     h_matrix = cvx_matrix(h)
     a_matrix = cvx_matrix(a)
     b_matrix = cvx_matrix(b)
+    logger.debug("Solving quadratic program for %d assets", n)
     solvers.options["show_progress"] = False
     result = solvers.qp(p_matrix, q_matrix, g_matrix, h_matrix, a_matrix, b_matrix)
     weights = result["x"]
+    logger.debug("Optimization returned weights %s", [float(x) for x in weights])
     return weights
 
 
@@ -179,6 +245,7 @@ def _filter_small_weights(weights: npt.NDArray[np.float64]) -> npt.NDArray[np.fl
         if abs(weight) < weight_threshold:
             weights[index] = 0
     weights = weights / sum(weights)
+    logger.debug("Filtered small weights: %s", weights.tolist())
     return weights
 
 
@@ -194,12 +261,18 @@ def _compose_basket(
         weight: float = pweight - nweight
         if weight != 0 and ticker_map[index] != hedged_ticker_symbol:
             basket[ticker_map[index]] = weight * -1.0
+    logger.debug("Composed basket: %s", basket)
     return basket
 
 
 def build_basket(
     hedged_ticker_symbol: str, basket_ticker_symbols: List[str]
 ) -> Dict[str, float]:
+    logger.debug(
+        "Building basket for %s with candidates %s",
+        hedged_ticker_symbol,
+        basket_ticker_symbols,
+    )
     quotes: Dict[str, pd.Series] = {
         ticker: historical_prices(ticker)
         for ticker in set(basket_ticker_symbols + [hedged_ticker_symbol])
@@ -210,4 +283,6 @@ def build_basket(
     weights = _minimize_portfolio_variance(returns_matrix)
     weights_array: npt.NDArray[np.float64] = np.array(weights)
     weights_array = _filter_small_weights(weights_array)
-    return _compose_basket(weights_array, ticker_map, hedged_ticker_symbol)
+    basket = _compose_basket(weights_array, ticker_map, hedged_ticker_symbol)
+    logger.debug("Built basket: %s", basket)
+    return basket
