@@ -95,10 +95,10 @@ def test_filters() -> None:
     filtered, tickers = _filter_duplicate_rows(matrix, tickers)
     assert filtered.tolist() == [[1, 2], [3, 4]] and tickers == ["A", "C"]
 
-    matrix = np.array([[1, 1, 1], [1, 2, 3]])
+    matrix = np.array([[1, 2, 3], [1, 1, 1]])
     tickers = ["A", "B"]
     filtered, tickers = _filter_no_variance_rows(matrix, tickers)
-    assert filtered.tolist() == [[1, 2, 3]] and tickers == ["B"]
+    assert filtered.tolist() == [[1, 2, 3]] and tickers == ["A"]
 
     matrix = np.array([[1, 2, 3], [4, 4, 4]])
     tickers = ["A", "B"]
