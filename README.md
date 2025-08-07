@@ -1,4 +1,4 @@
-# Quantitative Hedging
+# quantitative-hedging
 
 A Python library for constructing hedging baskets to offset positions using historical price data and quadratic programming.
 
