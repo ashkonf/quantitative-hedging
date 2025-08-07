@@ -4,14 +4,16 @@ from datetime import datetime, timedelta
 from io import StringIO
 import time
 from statistics import variance
-from typing import Dict, List, Tuple, cast
+from typing import TYPE_CHECKING, Dict, List, Tuple, cast
 
 from cvxopt import matrix as cvx_matrix, solvers
-from cvxopt.base import matrix as CVXMatrix  # noqa: F401
 import numpy as np
 import numpy.typing as npt
 import pandas as pd
 import requests
+
+if TYPE_CHECKING:
+    from cvxopt.base import matrix as CVXMatrix
 
 MARKET_DAYS_IN_YEAR: int = 252
 
