@@ -1,16 +1,11 @@
-import os
-import sys
-import re
 from datetime import datetime, timedelta
 import time
-import math
 import requests
 from io import StringIO
 
 import numpy as np
 import pandas as pd
 import cvxopt
-import cvxopt.blas
 import cvxopt.solvers
 from statistics import variance
 
