@@ -27,7 +27,24 @@ def datetime_to_timestamp(dt: datetime) -> float:
     return time.mktime(dt.timetuple()) + dt.microsecond / 1_000_000.0
 
 
-def historical_prices(ticker_symbol: str) -> pd.Series:
+def historical_prices(
+    ticker_symbol: str, retries: int = 3, backoff: float = 0.3
+) -> pd.Series:
+    """Fetch adjusted close prices for ``ticker_symbol``.
+
+    The Yahoo Finance endpoint occasionally fails or returns malformed data. This
+    function retries the download a few times and validates that the response
+    contains the expected ``Adj Close`` column before returning the series.
+
+    Args:
+        ticker_symbol: Symbol to fetch.
+        retries: Number of attempts before giving up.
+        backoff: Initial delay between retries in seconds; doubles each retry.
+
+    Raises:
+        RuntimeError: If the data cannot be retrieved or parsed.
+    """
+
     url: str = (
         "https://query1.finance.yahoo.com/v7/finance/download/%s?period1=%s&period2=%s"
         "&interval=1d&events=history&includeAdjustedClose=true"
@@ -37,8 +54,23 @@ def historical_prices(ticker_symbol: str) -> pd.Series:
             int(datetime_to_timestamp(datetime.now())),
         )
     )
-    df: pd.DataFrame = csvstr2df(requests.get(url).text)
-    return cast(pd.Series, df["Adj Close"])
+
+    for attempt in range(retries):
+        try:
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()
+            df: pd.DataFrame = csvstr2df(response.text)
+            if "Adj Close" not in df.columns:
+                raise ValueError("'Adj Close' column missing")
+            return cast(pd.Series, df["Adj Close"])
+        except (requests.RequestException, ValueError, pd.errors.ParserError) as exc:
+            if attempt == retries - 1:
+                raise RuntimeError(
+                    f"Failed to retrieve historical prices for {ticker_symbol}"
+                ) from exc
+            time.sleep(backoff * 2 ** attempt)
+
+    raise RuntimeError(f"Failed to retrieve historical prices for {ticker_symbol}")
 
 
 def _truncate_quotes(quotes: Dict[str, pd.Series]) -> Dict[str, pd.Series]:
