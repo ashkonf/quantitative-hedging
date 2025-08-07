@@ -43,9 +43,24 @@ def test_historical_prices(monkeypatch: pytest.MonkeyPatch) -> None:
     class DummyResponse:
         text = "Date,Adj Close\n2020-01-01,1\n2020-01-02,2\n"
 
+        def raise_for_status(self) -> None:
+            pass
+
     monkeypatch.setattr(requests, "get", lambda url: DummyResponse())
     series = historical_prices("AAPL")
     assert list(series) == [1, 2]
+
+
+def test_historical_prices_http_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    class DummyResponse:
+        text = ""
+
+        def raise_for_status(self) -> None:  # pragma: no cover - test raising path
+            raise requests.HTTPError("error")
+
+    monkeypatch.setattr(requests, "get", lambda url: DummyResponse())
+    with pytest.raises(RuntimeError):
+        historical_prices("AAPL")
 
 
 def test_truncate_and_remove_row() -> None:

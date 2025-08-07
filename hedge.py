@@ -37,7 +37,14 @@ def historical_prices(ticker_symbol: str) -> pd.Series:
             int(datetime_to_timestamp(datetime.now())),
         )
     )
-    df: pd.DataFrame = csvstr2df(requests.get(url).text)
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        raise RuntimeError(
+            f"Failed to fetch historical prices for {ticker_symbol}"
+        ) from exc
+    df: pd.DataFrame = csvstr2df(response.text)
     return cast(pd.Series, df["Adj Close"])
 
 
