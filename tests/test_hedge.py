@@ -48,10 +48,38 @@ def test_historical_prices(monkeypatch: pytest.MonkeyPatch) -> None:
         """Simple container for fake response text."""
 
         text = "Date,Adj Close\n2020-01-01,1\n2020-01-02,2\n"
+        
+        def __init__(self) -> None:
+            self.text = "Date,Adj Close\n2020-01-01,1\n2020-01-02,2\n"
+            self.status_code = 200
 
-    monkeypatch.setattr(requests, "get", lambda url: DummyResponse())
+        def raise_for_status(self) -> None:  # pragma: no cover - no-op
+            return None
+
+    monkeypatch.setattr(
+        requests,
+        "get",
+        lambda url, timeout=10: DummyResponse(),
+    )
     series = historical_prices("AAPL")
     assert list(series) == [1, 2]
+
+
+def test_historical_prices_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    class DummyResponse:
+        status_code = 500
+        text = ""
+
+        def raise_for_status(self) -> None:
+            raise requests.HTTPError("boom")
+
+    monkeypatch.setattr(
+        requests,
+        "get",
+        lambda url, timeout=10: DummyResponse(),
+    )
+    with pytest.raises(RuntimeError):
+        historical_prices("AAPL")
 
 
 def test_truncate_and_remove_row() -> None:
@@ -79,10 +107,15 @@ def test_filters() -> None:
     filtered, tickers = _filter_duplicate_rows(matrix, tickers)
     assert filtered.tolist() == [[1, 2], [3, 4]] and tickers == ["A", "C"]
 
-    matrix = np.array([[1, 1, 1], [1, 2, 3]])
+    matrix = np.array([[1, 2, 3], [1, 1, 1]])
     tickers = ["A", "B"]
     filtered, tickers = _filter_no_variance_rows(matrix, tickers)
-    assert filtered.tolist() == [[1, 2, 3]] and tickers == ["B"]
+    assert filtered.tolist() == [[1, 2, 3]] and tickers == ["A"]
+
+    matrix = np.array([[1, 2, 3], [4, 4, 4]])
+    tickers = ["A", "B"]
+    filtered, tickers = _filter_no_variance_rows(matrix, tickers)
+    assert filtered.tolist() == [[1, 2, 3]] and tickers == ["A"]
 
     matrix = np.array([[1, 1.0, 1.05], [1, 3, 5]])
     tickers = ["A", "B"]
