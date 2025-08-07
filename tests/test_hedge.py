@@ -9,7 +9,7 @@ import pandas as pd
 import pytest
 import requests
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from hedge import (
     MARKET_DAYS_IN_YEAR,
