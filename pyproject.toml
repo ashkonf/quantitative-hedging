@@ -27,6 +27,7 @@ target-version = "py312"
 
 [tool.pyright]
 pythonVersion = "3.12"
+exclude = ["tests"]
 
 [tool.pytest.ini_options]
 addopts = "--cov=hedge --cov-branch --cov-report=term-missing"
