@@ -1,15 +1,10 @@
 from datetime import datetime
 
-import sys
-from pathlib import Path
-
 import cvxopt
 import numpy as np
 import pandas as pd
 import pytest
 import requests
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from hedge import (
     MARKET_DAYS_IN_YEAR,
@@ -48,7 +43,7 @@ def test_historical_prices(monkeypatch: pytest.MonkeyPatch) -> None:
         """Simple container for fake response text."""
 
         text = "Date,Adj Close\n2020-01-01,1\n2020-01-02,2\n"
-        
+
         def __init__(self) -> None:
             self.text = "Date,Adj Close\n2020-01-01,1\n2020-01-02,2\n"
             self.status_code = 200
