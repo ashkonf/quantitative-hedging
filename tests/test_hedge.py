@@ -74,6 +74,11 @@ def test_filters() -> None:
     filtered, tickers = _filter_no_variance_rows(matrix, tickers)
     assert filtered.tolist() == [[1, 2, 3]] and tickers == ["B"]
 
+    matrix = np.array([[1, 2, 3], [4, 4, 4]])
+    tickers = ["A", "B"]
+    filtered, tickers = _filter_no_variance_rows(matrix, tickers)
+    assert filtered.tolist() == [[1, 2, 3]] and tickers == ["A"]
+
     matrix = np.array([[1, 1.0, 1.05], [1, 3, 5]])
     tickers = ["A", "B"]
     filtered, tickers = _filter_low_variance_rows(matrix, tickers)
