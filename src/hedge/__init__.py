@@ -30,8 +30,7 @@ def csvstr2df(string: str) -> pd.DataFrame:
 
 def datetime_to_timestamp(dt: datetime) -> float:
     """Return UNIX timestamp for a datetime."""
-
-    return time.mktime(dt.timetuple()) + dt.microsecond / 1_000_000.0
+    return dt.timestamp()
 
 
 def historical_prices(
@@ -141,7 +140,7 @@ def _filter_duplicate_rows(
         while index2 < len(price_matrix):
             if rows_equal(price_matrix[index1], price_matrix[index2]):
                 logger.debug("Removing duplicate row for %s", ticker_map[index2])
-                price_matrix = _remove_row(price_matrix, index1)
+                price_matrix = _remove_row(price_matrix, index2)
                 del ticker_map[index2]
             else:
                 index2 += 1
@@ -249,7 +248,9 @@ def _filter_small_weights(weights: npt.NDArray[np.float64]) -> npt.NDArray[np.fl
     for index, weight in enumerate(weights):
         if abs(weight) < weight_threshold:
             weights[index] = 0
-    weights = weights / sum(weights)
+    total_weight: float = float(sum(weights))
+    if total_weight != 0:
+        weights = weights / total_weight
     logger.debug("Filtered small weights: %s", weights.tolist())
     return weights
 

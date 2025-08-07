@@ -171,6 +171,14 @@ def test_filter_small_weights_threshold() -> None:
     assert filtered[1] == 0
 
 
+def test_filter_small_weights_all_zero() -> None:
+    """Skip renormalization when all weights are filtered out."""
+
+    weights = np.array([0.005, -0.005, 0.0, 0.0])
+    filtered = _filter_small_weights(weights)
+    assert np.all(filtered == 0)
+
+
 def test_build_basket(monkeypatch: pytest.MonkeyPatch) -> None:
     """Integrate helpers to build a hedging basket."""
 
