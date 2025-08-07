@@ -32,6 +32,8 @@ from hedge import (
 
 
 def test_csv_and_timestamp() -> None:
+    """Parse CSV strings and convert datetimes to timestamps."""
+
     csv_data = "Adj Close\n1\n2\n"
     df = csvstr2df(csv_data)
     assert list(df["Adj Close"]) == [1, 2]
@@ -40,7 +42,13 @@ def test_csv_and_timestamp() -> None:
 
 
 def test_historical_prices(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Fetch historical prices using a mocked HTTP response."""
+
     class DummyResponse:
+        """Simple container for fake response text."""
+
+        text = "Date,Adj Close\n2020-01-01,1\n2020-01-02,2\n"
+        
         def __init__(self) -> None:
             self.text = "Date,Adj Close\n2020-01-01,1\n2020-01-02,2\n"
             self.status_code = 200
@@ -75,6 +83,8 @@ def test_historical_prices_failure(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_truncate_and_remove_row() -> None:
+    """Limit quote history and delete rows from matrices."""
+
     quotes = {"A": pd.Series(range(MARKET_DAYS_IN_YEAR + 10))}
     truncated = _truncate_quotes(quotes)
     assert len(truncated["A"]) == MARKET_DAYS_IN_YEAR
@@ -85,6 +95,8 @@ def test_truncate_and_remove_row() -> None:
 
 
 def test_filters() -> None:
+    """Apply all row-filtering helpers to matrices."""
+
     matrix = np.array([[1, 2], [-1, 2]])
     tickers = ["A", "B"]
     filtered, tickers = _filter_negative_prices(matrix, tickers)
@@ -95,10 +107,10 @@ def test_filters() -> None:
     filtered, tickers = _filter_duplicate_rows(matrix, tickers)
     assert filtered.tolist() == [[1, 2], [3, 4]] and tickers == ["A", "C"]
 
-    matrix = np.array([[1, 1, 1], [1, 2, 3]])
+    matrix = np.array([[1, 2, 3], [1, 1, 1]])
     tickers = ["A", "B"]
     filtered, tickers = _filter_no_variance_rows(matrix, tickers)
-    assert filtered.tolist() == [[1, 2, 3]] and tickers == ["B"]
+    assert filtered.tolist() == [[1, 2, 3]] and tickers == ["A"]
 
     matrix = np.array([[1, 2, 3], [4, 4, 4]])
     tickers = ["A", "B"]
@@ -112,6 +124,8 @@ def test_filters() -> None:
 
 
 def test_build_price_matrix_and_returns() -> None:
+    """Generate price and return matrices."""
+
     quotes = {
         "A": pd.Series([1.0, 2.0, 3.0]),
         "B": pd.Series([1.0, 3.0, 1.0]),
@@ -119,20 +133,28 @@ def test_build_price_matrix_and_returns() -> None:
     price_matrix, ticker_map = _build_price_matrix(quotes, "A")
     assert ticker_map == ["A", "B"]
     returns_matrix = _build_returns_matrix(price_matrix)
-    assert len(returns_matrix) == 2
+    expected = np.array([[1.0, 0.5], [2.0, -2.0 / 3.0]])
+    assert returns_matrix.shape == (2, 2)
+    np.testing.assert_allclose(returns_matrix, expected)
 
 
 def test_minimize_portfolio_variance(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Optimize portfolio variance using a fake solver."""
+
     def fake_qp(P, q, G, h, A, b):
+        """Return uniform weights regardless of inputs."""
+
         return {"x": [0.25, 0.25, 0.25, 0.25]}
 
     monkeypatch.setattr(cvxopt.solvers, "qp", fake_qp)  # type: ignore[attr-defined]
-    returns = [[0.1, 0.2, 0.15], [0.05, 0.1, 0.0], [0.2, 0.1, 0.15]]
+    returns = np.array([[0.1, 0.2, 0.15], [0.05, 0.1, 0.0], [0.2, 0.1, 0.15]])
     weights = _minimize_portfolio_variance(returns)
     assert len(weights) == 4
 
 
 def test_filter_small_weights_and_compose() -> None:
+    """Filter small weights and convert to basket."""
+
     weights = np.array([0.6, 0.02, 0.1, 0.28])
     filtered = _filter_small_weights(weights)
     assert pytest.approx(sum(filtered)) == 1.0
@@ -142,12 +164,16 @@ def test_filter_small_weights_and_compose() -> None:
 
 
 def test_filter_small_weights_threshold() -> None:
+    """Ensure weights below threshold are zeroed out."""
+
     weights = np.array([0.5, 0.005, 0.495, 0.0])
     filtered = _filter_small_weights(weights)
     assert filtered[1] == 0
 
 
 def test_build_basket(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Integrate helpers to build a hedging basket."""
+
     monkeypatch.setattr(
         "hedge.historical_prices",
         lambda symbol: pd.Series([1, 2]) if symbol == "AAA" else pd.Series([2, 3]),
