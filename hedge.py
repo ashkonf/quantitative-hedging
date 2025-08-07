@@ -94,7 +94,7 @@ def _filter_no_variance_rows(
 ) -> Tuple[npt.NDArray[np.float64], List[str]]:
     index: int = 0
     while index < len(price_matrix):
-        if len(set(price_matrix[0])) == 1:
+        if len(set(price_matrix[index])) == 1:
             price_matrix = _remove_row(price_matrix, index)
             del ticker_map[index]
         else:
