@@ -27,7 +27,14 @@ target-version = "py312"
 
 [tool.pyright]
 pythonVersion = "3.12"
+include = ["src"]
 
 [tool.pytest.ini_options]
 addopts = "--cov=hedge --cov-branch --cov-report=term-missing"
 
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.setuptools.packages.find]
+where = ["src"]
